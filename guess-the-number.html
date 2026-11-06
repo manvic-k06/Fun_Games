@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Guess the Number</title>
+<style>
+:root{--bg:#f4f3ef;--card:#ffffff;--fg:#1f2330;--muted:#676c7b;--line:#d9d7d0;--accent:#2a7fa6;--good:#2e8b57;--bad:#d94f2a}
+@media (prefers-color-scheme:dark){:root{--bg:#14161c;--card:#1d2029;--fg:#eceef3;--muted:#9097a8;--line:#2e323d;--accent:#5bb8e0;--good:#5fd38d;--bad:#ff7a59}}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;padding:16px}
+.wrap{width:100%;max-width:380px;text-align:center;display:flex;flex-direction:column;gap:16px}
+h1{font-size:28px;margin:0}
+p{margin:0;color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.num{font:inherit;font-size:22px;font-weight:700;aspect-ratio:1;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--fg);cursor:pointer;transition:background .15s,transform .1s}
+.num:hover:not(:disabled){background:var(--line)}
+.num:active:not(:disabled){transform:scale(.95)}
+.num:disabled{cursor:default;opacity:.45}
+.num.picked{opacity:1;outline:3px solid var(--accent)}
+.num.secret{opacity:1;background:var(--good);color:#fff;border-color:var(--good)}
+#result{font-size:18px;font-weight:700;min-height:26px}
+#result.win{color:var(--good)}#result.lose{color:var(--bad)}
+.score{font-variant-numeric:tabular-nums;color:var(--muted)}
+button.again{font:inherit;font-weight:600;padding:12px;border-radius:10px;border:none;background:var(--fg);color:var(--bg);cursor:pointer}
+button.again[hidden]{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Guess the Number</h1>
+  <p>I've picked a number from 1 to 10. You get one guess.</p>
+  <div class="grid" id="grid"></div>
+  <div id="result"></div>
+  <div class="score" id="score">Wins: 0 / Rounds: 0</div>
+  <button class="again" id="again" hidden>Play again</button>
+</div>
+<script>
+const grid=document.getElementById('grid'),result=document.getElementById('result'),
+      scoreEl=document.getElementById('score'),againBtn=document.getElementById('again');
+let secret,wins=0,rounds=0;
+const buttons=[];
+
+for(let n=1;n<=10;n++){
+  const b=document.createElement('button');
+  b.className='num';b.textContent=n;
+  b.onclick=()=>guess(n);
+  grid.appendChild(b);buttons.push(b);
+}
+
+function newRound(){
+  secret=Math.floor(Math.random()*10)+1; // random number from 1 to 10
+  buttons.forEach(b=>{b.className='num';b.disabled=false});
+  result.textContent='';result.className='';
+  againBtn.hidden=true;
+}
+
+function guess(n){
+  rounds++;
+  buttons.forEach(b=>b.disabled=true);
+  buttons[n-1].classList.add('picked');
+  buttons[secret-1].classList.add('secret');
+  if(n===secret){wins++;result.textContent='You win! It was '+secret+'.';result.className='win'}
+  else{result.textContent='Sorry, it was '+secret+'.';result.className='lose'}
+  scoreEl.textContent='Wins: '+wins+' / Rounds: '+rounds;
+  againBtn.hidden=false;againBtn.focus();
+}
+
+againBtn.onclick=newRound;
+newRound();
+</script>
+</body>
+</html>

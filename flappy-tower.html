@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Flappy Tower</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:#1b2838;overflow:hidden;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+body{display:flex;align-items:center;justify-content:center;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+canvas{display:block;height:min(100vh,150vw);width:auto;aspect-ratio:2/3;max-width:100%;border-radius:8px;box-shadow:0 10px 40px rgba(0,0,0,.4);cursor:pointer}
+</style>
+</head>
+<body>
+<canvas id="c" width="400" height="600"></canvas>
+<script>
+// ---------- setup ----------
+const canvas=document.getElementById('c'),ctx=canvas.getContext('2d');
+const W=400,H=600,GROUND=520;            // game size and ground line
+const dpr=Math.min(window.devicePixelRatio||1,2);
+canvas.width=W*dpr;canvas.height=H*dpr;ctx.scale(dpr,dpr);
+
+// Same idea as Python's random.randint(a, b): a whole number from a to b, inclusive
+function randint(a,b){return Math.floor(Math.random()*(b-a+1))+a}
+
+// Tower settings
+const TOWER_W=64,GAP=150,BASE_H=60,STEP=50; // level 0 -> 60px tall, level 5 -> 310px tall
+const SPEED=160,SPAWN_EVERY=1.5;
+const GRAVITY=1500,FLAP=-420;
+
+const bird={x:100,y:260,vy:0,r:14};
+let towers=[],clouds=[],state='ready',score=0,spawnT=0,groundX=0,t=0;
+let best=0;try{best=+localStorage.getItem('flappyTowerBest')||0}catch(e){}
+
+for(let i=0;i<5;i++)clouds.push({x:Math.random()*W,y:40+Math.random()*200,s:0.6+Math.random()*0.8});
+
+function reset(){bird.y=260;bird.vy=0;towers=[];score=0;spawnT=0.4;state='ready'}
+
+function addTower(){
+  const level=randint(0,5);                      // <-- tower height decided by rand 0-5
+  const bottomH=BASE_H+level*STEP;               // height of the bottom tower
+  const gapTop=GROUND-bottomH-GAP;               // where the top tower ends
+  towers.push({x:W,level,bottomH,gapTop,passed:false});
+}
+
+function flap(){
+  if(state==='over'){reset();return}
+  if(state==='ready')state='play';
+  bird.vy=FLAP;
+}
+
+// ---------- input ----------
+addEventListener('keydown',e=>{if(e.code==='Space'||e.code==='ArrowUp'){e.preventDefault();flap()}});
+canvas.addEventListener('pointerdown',e=>{e.preventDefault();flap()});
+
+// ---------- update ----------
+function update(dt){
+  t+=dt;
+  for(const c of clouds){c.x-=12*c.s*dt;if(c.x<-80){c.x=W+40;c.y=40+Math.random()*200}}
+  if(state!=='over')groundX=(groundX-SPEED*dt)%24;
+
+  if(state==='ready'){bird.y=260+Math.sin(t*3)*8;return}
+  if(state==='over'){if(bird.y<GROUND-bird.r){bird.vy+=GRAVITY*dt;bird.y=Math.min(GROUND-bird.r,bird.y+bird.vy*dt)}return}
+
+  bird.vy+=GRAVITY*dt;bird.y+=bird.vy*dt;
+  if(bird.y<bird.r){bird.y=bird.r;bird.vy=0}
+
+  spawnT-=dt;
+  if(spawnT<=0){addTower();spawnT=SPAWN_EVERY}
+
+  for(const tw of towers){
+    tw.x-=SPEED*dt;
+    if(!tw.passed&&tw.x+TOWER_W<bird.x){tw.passed=true;score++}
+    if(hits(tw))return die();
+  }
+  towers=towers.filter(tw=>tw.x>-TOWER_W);
+  if(bird.y+bird.r>=GROUND)die();
+}
+
+function circleRect(rx,ry,rw,rh){
+  const cx=Math.max(rx,Math.min(bird.x,rx+rw)),cy=Math.max(ry,Math.min(bird.y,ry+rh));
+  return (cx-bird.x)**2+(cy-bird.y)**2<(bird.r-2)**2;
+}
+function hits(tw){
+  return circleRect(tw.x,0,TOWER_W,tw.gapTop)||circleRect(tw.x,GROUND-tw.bottomH,TOWER_W,tw.bottomH);
+}
+function die(){
+  state='over';
+  if(score>best){best=score;try{localStorage.setItem('flappyTowerBest',best)}catch(e){}}
+}
+
+// ---------- draw ----------
+function drawTower(x,y,h,capAtBottom){
+  ctx.fillStyle='#4caf50';ctx.fillRect(x,y,TOWER_W,h);
+  ctx.fillStyle='#66cc6a';ctx.fillRect(x+6,y,10,h);            // highlight
+  ctx.fillStyle='#2e7d32';ctx.fillRect(x+TOWER_W-10,y,10,h);   // shadow
+  const capY=capAtBottom?y+h-24:y;
+  ctx.fillStyle='#43a047';ctx.fillRect(x-5,capY,TOWER_W+10,24);
+  ctx.strokeStyle='#1b5e20';ctx.lineWidth=2;
+  ctx.strokeRect(x,y,TOWER_W,h);ctx.strokeRect(x-5,capY,TOWER_W+10,24);
+}
+
+function drawBird(){
+  const tilt=state==='ready'?0:Math.max(-0.5,Math.min(1.2,bird.vy/600));
+  ctx.save();ctx.translate(bird.x,bird.y);ctx.rotate(tilt);
+  ctx.fillStyle='#ffd23f';ctx.beginPath();ctx.arc(0,0,bird.r,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='#c99500';ctx.lineWidth=2;ctx.stroke();
+  const flapY=Math.sin(t*20)*4;                                   // wing
+  ctx.fillStyle='#fff3c4';ctx.beginPath();ctx.ellipse(-5,2+flapY*(state==='over'?0:1),8,5,0,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(6,-5,5,0,Math.PI*2);ctx.fill();   // eye
+  ctx.fillStyle='#222';ctx.beginPath();ctx.arc(7.5,-5,2.2,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#ff7043';ctx.beginPath();ctx.moveTo(11,0);ctx.lineTo(21,3);ctx.lineTo(11,7);ctx.closePath();ctx.fill(); // beak
+  ctx.restore();
+}
+
+function text(s,x,y,size,align='center'){
+  ctx.font=`800 ${size}px system-ui,sans-serif`;ctx.textAlign=align;
+  ctx.lineWidth=size/6;ctx.strokeStyle='#1b2838';ctx.strokeText(s,x,y);
+  ctx.fillStyle='#fff';ctx.fillText(s,x,y);
+}
+
+function draw(){
+  // sky
+  const g=ctx.createLinearGradient(0,0,0,GROUND);g.addColorStop(0,'#5ec4f0');g.addColorStop(1,'#bfe9f7');
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,GROUND);
+  ctx.fillStyle='rgba(255,255,255,.85)';
+  for(const c of clouds){ctx.beginPath();ctx.arc(c.x,c.y,18*c.s,0,7);ctx.arc(c.x+20*c.s,c.y-8*c.s,22*c.s,0,7);ctx.arc(c.x+42*c.s,c.y,18*c.s,0,7);ctx.fill()}
+
+  // towers
+  for(const tw of towers){
+    drawTower(tw.x,0,tw.gapTop,true);
+    drawTower(tw.x,GROUND-tw.bottomH,tw.bottomH,false);
+  }
+
+  // ground
+  ctx.fillStyle='#ded895';ctx.fillRect(0,GROUND,W,H-GROUND);
+  ctx.fillStyle='#8bc34a';ctx.fillRect(0,GROUND,W,14);
+  ctx.fillStyle='#7cb342';
+  for(let x=groundX;x<W;x+=24){ctx.beginPath();ctx.moveTo(x,GROUND+14);ctx.lineTo(x+12,GROUND+14);ctx.lineTo(x+6,GROUND);ctx.closePath();ctx.fill()}
+
+  drawBird();
+
+  // HUD
+  if(state!=='ready')text(String(score),W/2,70,48);
+  if(state==='ready'){
+    text('FLAPPY TOWER',W/2,150,40);
+    text('Tap / Click / Space to flap',W/2,330,18);
+  }
+  if(state==='over'){
+    text('GAME OVER',W/2,200,44);
+    text('Score '+score+'   Best '+best,W/2,250,22);
+    text('Tap to play again',W/2,300,18);
+  }
+  text('Best '+best,W-12,H-24,16,'right');
+}
+
+// ---------- loop ----------
+let last=performance.now();
+function loop(now){const dt=Math.min(0.033,(now-last)/1000);last=now;update(dt);draw();requestAnimationFrame(loop)}
+reset();requestAnimationFrame(loop);
+</script>
+</body>
+</html>
